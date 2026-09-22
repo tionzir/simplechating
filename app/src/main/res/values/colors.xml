@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#2F6FED</color>
+    <color name="primary_dark">#1E4FB0</color>
+    <color name="accent">#00B894</color>
+    <color name="bg">#F5F7FB</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="text">#1B1F27</color>
+    <color name="text_sub">#5B6472</color>
+    <color name="ball_bg">#E62F6FED</color>
+    <color name="panel_bg">#F2FFFFFF</color>
+</resources>
