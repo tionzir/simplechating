@@ -4,15 +4,20 @@ plugins {
 }
 
 android {
-    namespace = "com.smiplechating"
+    namespace = "com.simplechating"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.smiplechating"
+        applicationId = "com.simplechating"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+
+        // ML Kit 中文识别自带各 ABI 的 native 库，只保留 arm64 省体积
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     buildTypes {
@@ -22,6 +27,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
         }
     }
 
@@ -47,4 +58,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.code.gson:gson:2.11.0")
+    // 端上 OCR（bundled 中文模型，无需 Google Play 服务）
+    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
 }
