@@ -10,6 +10,10 @@ import android.util.Log
  *
  * Key handling: stored in app-private SharedPreferences (not world-readable,
  * never logged, never in code/git). Only key *lengths* are ever logged.
+ *
+ * === SimpleChating 改版 ===
+ * judge 路由默认指向本机 Laya 推断服务（Termux 里的 laya_serve），
+ * reply 路由默认指向 DeepSeek 官方，vision 仍走 OpenRouter 兼容端点。
  */
 class Prefs(context: Context, prefsName: String = PREFS_MAIN) {
 
@@ -42,14 +46,14 @@ class Prefs(context: Context, prefsName: String = PREFS_MAIN) {
 
     // ---------------------------------------------------------------- judge
 
-    /** "openrouter" | "typesafe" | "custom". */
+    /** "laya" | "openrouter" | "typesafe" | "custom". */
     var judgeProvider: String
-        get() = sp.getString(K_JUDGE_PROVIDER, PROVIDER_OPENROUTER) ?: PROVIDER_OPENROUTER
+        get() = sp.getString(K_JUDGE_PROVIDER, PROVIDER_LAYAY) ?: PROVIDER_LAYAY
         set(v) = sp.edit().putString(K_JUDGE_PROVIDER, v.trim()).apply()
 
     /** Host root; the path is appended per provider (see [judgeEndpoint]). */
     var judgeBaseUrl: String
-        get() = sp.getString(K_JUDGE_BASE, DEFAULT_JUDGE_BASE_OPENROUTER) ?: DEFAULT_JUDGE_BASE_OPENROUTER
+        get() = sp.getString(K_JUDGE_BASE, defaultJudgeBase()) ?: defaultJudgeBase()
         set(v) = sp.edit().putString(K_JUDGE_BASE, v.trim()).apply()
 
     var judgeKey: String
@@ -57,7 +61,7 @@ class Prefs(context: Context, prefsName: String = PREFS_MAIN) {
         set(v) = sp.edit().putString(K_JUDGE_KEY, v.trim()).apply()
 
     var judgeModel: String
-        get() = sp.getString(K_JUDGE_MODEL, DEFAULT_JUDGE_MODEL_OPENROUTER) ?: DEFAULT_JUDGE_MODEL_OPENROUTER
+        get() = sp.getString(K_JUDGE_MODEL, defaultJudgeModel()) ?: defaultJudgeModel()
         set(v) = sp.edit().putString(K_JUDGE_MODEL, v.trim()).apply()
 
     /** Back-compat alias so older call sites keep compiling. */
@@ -193,10 +197,16 @@ class Prefs(context: Context, prefsName: String = PREFS_MAIN) {
     /** Vision route key, falling back to reply then judge. */
     fun effectiveVisionKey(): String = visionKey.ifBlank { effectiveReplyKey() }
 
-    /** Full POST URL for the Jev decisions call, per provider. */
+    /**
+     * Full POST URL for the Jev decisions call, per provider.
+     *
+     * laya: the local Termux service (laya_serve) — no key required, plain
+     *       HTTP on loopback. Path is fixed at /judge.
+     */
     fun judgeEndpoint(): String {
         val base = judgeBaseUrl.trim().trimEnd('/')
         return when (judgeProvider) {
+            PROVIDER_LAYAY -> "$base/judge"
             PROVIDER_TYPESAFE -> "$base/v1/systemone"
             PROVIDER_CUSTOM -> judgeBaseUrl.trim()   // user supplies the full URL
             else -> "$base/alpha/decisions"
@@ -219,8 +229,24 @@ class Prefs(context: Context, prefsName: String = PREFS_MAIN) {
         return wl.any { title.contains(it) }
     }
 
-    /** Readiness gate: the judge route is the one that must be configured. */
-    fun hasKey(): Boolean = judgeKey.isNotBlank()
+    /**
+     * Readiness gate. The local Laya service needs no key, so a "laya" provider
+     * counts as ready as soon as its base URL is filled in. Other providers
+     * still require a judge key.
+     */
+    fun hasKey(): Boolean =
+        if (judgeProvider == PROVIDER_LAYAY) judgeBaseUrl.isNotBlank()
+        else judgeKey.isNotBlank()
+
+    private fun defaultJudgeBase(): String =
+        if ((sp.getString(K_JUDGE_PROVIDER, PROVIDER_LAYAY) ?: PROVIDER_LAYAY) == PROVIDER_LAYAY)
+            DEFAULT_JUDGE_BASE_LAYAY
+        else DEFAULT_JUDGE_BASE_OPENROUTER
+
+    private fun defaultJudgeModel(): String =
+        if ((sp.getString(K_JUDGE_PROVIDER, PROVIDER_LAYAY) ?: PROVIDER_LAYAY) == PROVIDER_LAYAY)
+            DEFAULT_JUDGE_MODEL_LAYAY
+        else DEFAULT_JUDGE_MODEL_OPENROUTER
 
     companion object {
         private const val TAG = "JEVASSIST"
@@ -255,6 +281,7 @@ class Prefs(context: Context, prefsName: String = PREFS_MAIN) {
         private const val K_BUBBLE_X = "bubble_x"
         private const val K_AUTO = "auto_analyze"
 
+        const val PROVIDER_LAYAY = "laya"
         const val PROVIDER_OPENROUTER = "openrouter"
         const val PROVIDER_TYPESAFE = "typesafe"
         const val PROVIDER_CUSTOM = "custom"
@@ -263,14 +290,20 @@ class Prefs(context: Context, prefsName: String = PREFS_MAIN) {
         const val OCR_VISION = "vision"
 
         // Judge route presets.
+        // Local Laya service (Termux laya_serve) — loopback, no key.
+        const val DEFAULT_JUDGE_BASE_LAYAY = "http://127.0.0.1:8765"
+        const val DEFAULT_JUDGE_MODEL_LAYAY = "laya"
         const val DEFAULT_JUDGE_BASE_OPENROUTER = "https://openrouter.ai/api"
         const val DEFAULT_JUDGE_MODEL_OPENROUTER = "typesafe/jev-1.13"
         const val DEFAULT_JUDGE_BASE_TYPESAFE = "https://api.typesafe.ai"
         const val DEFAULT_JUDGE_MODEL_TYPESAFE = "jev-latest"
 
         // Reply route presets (OpenAI-compatible chat completions).
-        const val DEFAULT_REPLY_BASE = "https://openrouter.ai/api/v1"
-        const val DEFAULT_REPLY_MODEL = "deepseek/deepseek-chat-v3.1"
+        // 改版：默认直连 DeepSeek 官方。
+        const val DEFAULT_REPLY_BASE = "https://api.deepseek.com/v1"
+        const val DEFAULT_REPLY_MODEL = "deepseek-chat"
+        const val OPENROUTER_REPLY_BASE = "https://openrouter.ai/api/v1"
+        const val OPENROUTER_REPLY_MODEL = "deepseek/deepseek-chat-v3.1"
         const val DEEPSEEK_BASE = "https://api.deepseek.com/v1"
         const val DEEPSEEK_MODEL = "deepseek-chat"
         const val DASHSCOPE_BASE = "https://dashscope.aliyuncs.com/compatible-mode/v1"

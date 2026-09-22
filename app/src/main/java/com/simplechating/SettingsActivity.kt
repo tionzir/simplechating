@@ -69,42 +69,47 @@ class SettingsActivity : AppCompatActivity() {
         // =================== 接口 ===================
         root.addView(section("接口"))
 
-        // --- 判断接口（Jev） ---
+        // --- 判断接口（本地 Laya / Jev）---
         val judgeCard = card()
-        judgeCard.addView(cardTitle("判断接口（Jev）"))
-        judgeCard.addView(text("读对方消息、给意图判断和候选排序。必须配置。", 12f, sub))
+        judgeCard.addView(cardTitle("判断接口（本地 Laya / Jev）"))
+        judgeCard.addView(text("读对方消息、给意图判断和候选排序。默认走本机 Laya 推断服务。", 12f, sub))
 
-        val judgeBaseEdit = edit(prefs.judgeBaseUrl, Prefs.DEFAULT_JUDGE_BASE_OPENROUTER)
-        val judgeModelEdit = edit(prefs.judgeModel, Prefs.DEFAULT_JUDGE_MODEL_OPENROUTER)
+        val judgeBaseEdit = edit(prefs.judgeBaseUrl, Prefs.DEFAULT_JUDGE_BASE_LAYAY)
+        val judgeModelEdit = edit(prefs.judgeModel, Prefs.DEFAULT_JUDGE_MODEL_LAYAY)
         judgeProviderIdx = when (prefs.judgeProvider) {
-            Prefs.PROVIDER_TYPESAFE -> 1
-            Prefs.PROVIDER_CUSTOM -> 2
-            else -> 0
+            Prefs.PROVIDER_LAYAY -> 0
+            Prefs.PROVIDER_TYPESAFE -> 2
+            Prefs.PROVIDER_CUSTOM -> 3
+            else -> 1   // openrouter
         }
         judgeCard.addView(pills(
-            listOf("OpenRouter", "TypeSafe 直连", "自定义"), judgeProviderIdx) { idx ->
+            listOf("本地 Laya", "OpenRouter", "TypeSafe 直连", "自定义"), judgeProviderIdx) { idx ->
             judgeProviderIdx = idx
             when (idx) {
                 0 -> {
+                    judgeBaseEdit.setText(Prefs.DEFAULT_JUDGE_BASE_LAYAY)
+                    judgeModelEdit.setText(Prefs.DEFAULT_JUDGE_MODEL_LAYAY)
+                }
+                1 -> {
                     judgeBaseEdit.setText(Prefs.DEFAULT_JUDGE_BASE_OPENROUTER)
                     judgeModelEdit.setText(Prefs.DEFAULT_JUDGE_MODEL_OPENROUTER)
                 }
-                1 -> {
+                2 -> {
                     judgeBaseEdit.setText(Prefs.DEFAULT_JUDGE_BASE_TYPESAFE)
                     judgeModelEdit.setText(Prefs.DEFAULT_JUDGE_MODEL_TYPESAFE)
                 }
                 // Custom POSTs the box verbatim, so a preset HOST left in the box
                 // would hit the API root. Expand it into the full endpoint the
                 // preset would have used; anything hand-typed is left alone.
-                2 -> judgeBaseEdit.setText(expandJudgeUrl(judgeBaseEdit.text.toString()))
+                3 -> judgeBaseEdit.setText(expandJudgeUrl(judgeBaseEdit.text.toString()))
             }
         })
         judgeCard.addView(label("Base URL"))
         judgeCard.addView(judgeBaseEdit)
-        judgeCard.addView(text("OpenRouter 拼 /alpha/decisions；TypeSafe 拼 /v1/systemone；自定义按原样 POST。",
-            11f, sub))
-        judgeCard.addView(label("密钥"))
-        judgeCard.addView(edit(prefs.judgeKey, "sk-...", password = true).also { judgeKeyEdit = it })
+        judgeCard.addView(text("本地 Laya 拼 /judge（无需密钥）；OpenRouter 拼 /alpha/decisions；" +
+            "TypeSafe 拼 /v1/systemone；自定义按原样 POST。", 11f, sub))
+        judgeCard.addView(label("密钥（本地 Laya 可留空）"))
+        judgeCard.addView(edit(prefs.judgeKey, "sk-...（本地 Laya 不用填）", password = true).also { judgeKeyEdit = it })
         judgeCard.addView(label("模型"))
         judgeCard.addView(judgeModelEdit)
         val judgeResult = resultText()
@@ -112,11 +117,11 @@ class SettingsActivity : AppCompatActivity() {
             val base = judgeBaseEdit.text.toString().trim()
             val key = judgeKeyEdit.text.toString().trim()
             val model = judgeModelEdit.text.toString().trim()
-            if (key.isBlank()) { judgeResult.text = "请先填密钥"; return@cardBtn }
-            judgeResult.text = "测试中…"
             // Provider follows the address when it is still a known preset host,
             // so a stale pill selection cannot send a TypeSafe path to OpenRouter.
             val provider = resolveJudgeProvider(judgeProviderIdx, base)
+            // Only the keyed providers need a key; local Laya is loopback and keyless.
+            if (needsJudgeKey(provider) && key.isBlank()) { judgeResult.text = "请先填密钥"; return@cardBtn }
             if (provider == Prefs.PROVIDER_CUSTOM && base.isBlank()) {
                 judgeResult.text = "自定义档要填完整 URL（带路径）"; return@cardBtn
             }
@@ -125,6 +130,7 @@ class SettingsActivity : AppCompatActivity() {
             if (provider == Prefs.PROVIDER_CUSTOM && model.isBlank()) {
                 judgeResult.text = "请填写模型名"; return@cardBtn
             }
+            judgeResult.text = "测试中…"
             val probe = draftPrefs(SCRATCH_JUDGE) {
                 judgeProvider = provider
                 judgeBaseUrl = base.ifBlank { defaultJudgeBase(provider) }
@@ -150,21 +156,21 @@ class SettingsActivity : AppCompatActivity() {
         // --- 回复接口 ---
         val replyCard = card()
         replyCard.addView(cardTitle("回复接口"))
-        replyCard.addView(text("生成 3 条候选回复。任何 OpenAI 兼容地址，填到 /v1 为止。", 12f, sub))
+        replyCard.addView(text("生成 3 条候选回复。默认 DeepSeek 官方，任何 OpenAI 兼容地址填到 /v1 为止。", 12f, sub))
 
         val replyBaseEdit = edit(prefs.replyBaseUrl, Prefs.DEFAULT_REPLY_BASE)
         val replyModelEdit = edit(prefs.replyModel, Prefs.DEFAULT_REPLY_MODEL)
         val replyIdx = when (prefs.replyBaseUrl.trim().trimEnd('/')) {
-            Prefs.DEFAULT_REPLY_BASE -> 0
-            Prefs.DEEPSEEK_BASE -> 1
+            Prefs.DEEPSEEK_BASE -> 0
+            Prefs.OPENROUTER_REPLY_BASE -> 1
             Prefs.DASHSCOPE_BASE -> 2
             else -> 3
         }
         replyCard.addView(pills(
-            listOf("OpenRouter", "DeepSeek 官方", "通义兼容", "自定义"), replyIdx) { idx ->
+            listOf("DeepSeek 官方", "OpenRouter", "通义兼容", "自定义"), replyIdx) { idx ->
             when (idx) {
-                0 -> { replyBaseEdit.setText(Prefs.DEFAULT_REPLY_BASE); replyModelEdit.setText(Prefs.DEFAULT_REPLY_MODEL) }
-                1 -> { replyBaseEdit.setText(Prefs.DEEPSEEK_BASE); replyModelEdit.setText(Prefs.DEEPSEEK_MODEL) }
+                0 -> { replyBaseEdit.setText(Prefs.DEEPSEEK_BASE); replyModelEdit.setText(Prefs.DEEPSEEK_MODEL) }
+                1 -> { replyBaseEdit.setText(Prefs.OPENROUTER_REPLY_BASE); replyModelEdit.setText(Prefs.OPENROUTER_REPLY_MODEL) }
                 2 -> { replyBaseEdit.setText(Prefs.DASHSCOPE_BASE); replyModelEdit.setText(Prefs.DASHSCOPE_MODEL) }
             }
         })
@@ -263,7 +269,7 @@ class SettingsActivity : AppCompatActivity() {
         // =================== 分析 ===================
         root.addView(section("分析"))
         val card2 = card()
-        card2.addView(label("关系描述（给 Jev 判断用）"))
+        card2.addView(label("关系描述（给判断用）"))
         val relEdit = edit(prefs.relationship, Prefs.DEFAULT_REL)
         card2.addView(relEdit)
         card2.addView(label("会话白名单（每行一个关键词，空=所有会话）"))
@@ -394,22 +400,28 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var replyKeyEdit: EditText
     private lateinit var visionKeyEdit: EditText
 
+    /** Pill index -> provider id (0=本地Laya 1=OpenRouter 2=TypeSafe 3=自定义). */
     private fun providerOf(idx: Int) = when (idx) {
-        1 -> Prefs.PROVIDER_TYPESAFE
-        2 -> Prefs.PROVIDER_CUSTOM
+        0 -> Prefs.PROVIDER_LAYAY
+        2 -> Prefs.PROVIDER_TYPESAFE
+        3 -> Prefs.PROVIDER_CUSTOM
         else -> Prefs.PROVIDER_OPENROUTER
     }
 
+    /** Only keyed providers need an API key; local Laya is loopback and keyless. */
+    private fun needsJudgeKey(provider: String): Boolean = provider != Prefs.PROVIDER_LAYAY
+
     /**
      * The provider actually implied by what is in the address box. A preset host
-     * carries its own path (`/alpha/decisions`, `/v1/systemone`), so leaving that
-     * host in the box while the pill says something else would POST the wrong
-     * path — or, for custom, the bare API root.
+     * carries its own path (`/judge`, `/alpha/decisions`, `/v1/systemone`), so
+     * leaving that host in the box while the pill says something else would POST
+     * the wrong path — or, for custom, the bare API root.
      */
     private fun resolveJudgeProvider(idx: Int, base: String): String =
         when (base.trim().trimEnd('/')) {
             Prefs.DEFAULT_JUDGE_BASE_OPENROUTER -> Prefs.PROVIDER_OPENROUTER
             Prefs.DEFAULT_JUDGE_BASE_TYPESAFE -> Prefs.PROVIDER_TYPESAFE
+            Prefs.DEFAULT_JUDGE_BASE_LAYAY -> Prefs.PROVIDER_LAYAY
             else -> providerOf(idx)
         }
 
@@ -420,13 +432,17 @@ class SettingsActivity : AppCompatActivity() {
         else -> base.trim()
     }
 
-    private fun defaultJudgeBase(provider: String): String =
-        if (provider == Prefs.PROVIDER_TYPESAFE) Prefs.DEFAULT_JUDGE_BASE_TYPESAFE
-        else Prefs.DEFAULT_JUDGE_BASE_OPENROUTER
+    private fun defaultJudgeBase(provider: String): String = when (provider) {
+        Prefs.PROVIDER_LAYAY -> Prefs.DEFAULT_JUDGE_BASE_LAYAY
+        Prefs.PROVIDER_TYPESAFE -> Prefs.DEFAULT_JUDGE_BASE_TYPESAFE
+        else -> Prefs.DEFAULT_JUDGE_BASE_OPENROUTER
+    }
 
-    private fun defaultJudgeModel(provider: String): String =
-        if (provider == Prefs.PROVIDER_TYPESAFE) Prefs.DEFAULT_JUDGE_MODEL_TYPESAFE
-        else Prefs.DEFAULT_JUDGE_MODEL_OPENROUTER
+    private fun defaultJudgeModel(provider: String): String = when (provider) {
+        Prefs.PROVIDER_LAYAY -> Prefs.DEFAULT_JUDGE_MODEL_LAYAY
+        Prefs.PROVIDER_TYPESAFE -> Prefs.DEFAULT_JUDGE_MODEL_TYPESAFE
+        else -> Prefs.DEFAULT_JUDGE_MODEL_OPENROUTER
+    }
 
     /**
      * A throwaway [Prefs] view carrying exactly what is in the boxes right now,
