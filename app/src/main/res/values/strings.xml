@@ -1,4 +1,57 @@
 <resources>
     <string name="app_name">Jev助手</string>
     <string name="a11y_desc_disguised">读取当前聊天窗口文字，用于生成回复建议。不会自动发送消息。</string>
+
+    <!-- 主界面 activity_main.xml -->
+    <string name="main_status">状态：未连接</string>
+    <string name="main_btn_accessibility">开启无障碍服务</string>
+    <string name="main_btn_overlay">授予悬浮窗权限</string>
+    <string name="main_btn_start_float">启动悬浮面板</string>
+    <string name="main_btn_test">测试判断接口</string>
+    <string name="main_btn_settings">设置</string>
+    <string name="main_log">运行日志</string>
+    <string name="main_log_clear">清空日志</string>
+
+    <!-- 悬浮面板 float_panel.xml -->
+    <string name="panel_title">候选回复</string>
+    <string name="panel_close">关闭</string>
+    <string name="panel_analyze">分析当前聊天</string>
+    <string name="panel_empty">暂无候选回复，点击“分析当前聊天”</string>
+
+    <!-- 设置页 · 服务接口 -->
+    <string name="pref_cat_server">服务接口</string>
+    <string name="pref_server_base">判断服务地址</string>
+    <string name="pref_server_timeout">请求超时（秒）</string>
+    <string name="pref_use_local_only">仅使用本地判断</string>
+    <string name="pref_use_local_only_sum">开启后只调用本地 Laya 判断，不请求远程判断接口</string>
+
+    <!-- 设置页 · 聊天采集 -->
+    <string name="pref_cat_capture">聊天采集</string>
+    <string name="pref_watch_qq">监听 QQ 聊天窗口</string>
+    <string name="pref_watch_wechat">监听微信聊天窗口</string>
+    <string name="pref_max_messages">最多读取消息条数</string>
+    <string name="pref_auto_trigger">自动触发分析</string>
+    <string name="pref_auto_trigger_sum">检测到新消息时自动分析并生成候选回复</string>
+
+    <!-- 设置页 · 悬浮窗 -->
+    <string name="pref_cat_float">悬浮窗</string>
+    <string name="pref_float_ball">显示悬浮球</string>
+    <string name="pref_float_alpha">悬浮窗透明度</string>
+
+    <!-- 设置页 · 回复生成 -->
+    <string name="pref_cat_reply">回复生成</string>
+    <string name="pref_reply_base">回复服务地址</string>
+    <string name="pref_reply_key">DeepSeek API Key</string>
+    <string name="pref_reply_model">回复模型</string>
+    <string name="pref_fill_only">仅填入输入框</string>
+    <string name="pref_fill_only_sum">只把候选回复写入输入框，绝不自动发送</string>
+
+    <!-- 设置页 · 日志 -->
+    <string name="pref_cat_log">日志</string>
+    <string name="pref_log_view">在面板中显示日志</string>
+    <string name="pref_log_view_sum">把运行日志显示在悬浮面板下方，便于排查</string>
+
+    <!-- 设置页 · 关于 -->
+    <string name="pref_cat_about">关于</string>
+    <string name="pref_version">版本</string>
 </resources>
