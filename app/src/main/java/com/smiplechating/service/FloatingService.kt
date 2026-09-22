@@ -34,7 +34,9 @@ import kotlinx.coroutines.launch
 
 /**
  * 悬浮球 + 候选面板服务。
+ *
  * 前台服务，保证在后台存活。
+ * 关键：通知里带「停止」按钮，用户可随时关闭而不用卸载。
  */
 class FloatingService : Service() {
 
@@ -47,18 +49,32 @@ class FloatingService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        alive = true                       // ← 新增：真实存活标志
         startForegroundSafe()
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         if (Prefs.floatBallEnabled(this)) showBall()
-        Bus.log("悬浮球服务已启动")
+        Bus.log("悬浮球服务已启动 (pid=${android.os.Process.myPid()})")
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP) {
+            Bus.log("收到通知栏「停止」指令，服务即将退出")
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        // 被系统重启后可能悬浮球丢了，重新确保一次
+        if (ballView == null && Prefs.floatBallEnabled(this)) {
+            runCatching { showBall() }
+        }
+        return START_STICKY
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
         super.onDestroy()
+        alive = false                      // ← 新增：真实存活标志
         removeBall()
         removePanel()
         scope.cancel()
@@ -77,23 +93,46 @@ class FloatingService : Service() {
                 )
             }
         }
+
         val pi = PendingIntent.getActivity(
             this, 0,
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
+
+        // 通知栏「停止」按钮
+        val stopPi = PendingIntent.getService(
+            this, 1,
+            Intent(this, FloatingService::class.java).setAction(ACTION_STOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
         val n: Notification = NotificationCompat.Builder(this, chId)
             .setContentTitle("SimpleChating")
-            .setContentText("悬浮助手运行中")
+            .setContentText("聊天助手运行中（点通知可打开）")
             .setSmallIcon(android.R.drawable.stat_notify_chat)
             .setContentIntent(pi)
             .setOngoing(true)
+            .addAction(0, "停止", stopPi)
             .build()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(NOTI_ID, n, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        } else {
-            startForeground(NOTI_ID, n)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    NOTI_ID, n,
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTI_ID, n,
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
+            } else {
+                startForeground(NOTI_ID, n)
+            }
+        } catch (e: Exception) {
+            // 前台启动失败（如权限被撤）不能让服务崩溃，降级为普通服务
+            Bus.log("startForeground 失败: ${e.javaClass.simpleName} ${e.message}")
         }
     }
 
@@ -247,5 +286,9 @@ class FloatingService : Service() {
 
     companion object {
         const val NOTI_ID = 1001
+        const val ACTION_STOP = "com.smiplechating.action.STOP_FLOAT"
+
+        /** 服务是否真的活着（供主界面按钮显示，别再用偏好猜） */
+        @Volatile var alive = false
     }
 }

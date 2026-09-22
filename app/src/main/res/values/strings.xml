@@ -42,6 +42,10 @@
     <string name="pref_float_ball">显示悬浮球</string>
     <string name="pref_float_alpha">悬浮球不透明度</string>
 
+    <string name="pref_cat_log">日志</string>
+    <string name="pref_log_view">查看运行日志</string>
+    <string name="pref_log_view_sum">显示内存里的最近日志（约 4000 字符）</string>
+
     <string name="toast_copied">已复制</string>
     <string name="toast_no_content">没有可复制的内容</string>
     <string name="toast_server_ok">服务连接正常</string>

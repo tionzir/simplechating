@@ -33,6 +33,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // 绑定日志文件，并把上次运行遗留的日志读回（关键：不加这行日志永不落盘）
+        Bus.attach(this)
+
         tvStatus = findViewById(R.id.tvStatus)
         tvStatusDetail = findViewById(R.id.tvStatusDetail)
         tvLog = findViewById(R.id.tvLog)
@@ -81,10 +84,12 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    private fun isFloatRunning(): Boolean {
-        // 简单判断：偏好开启且悬浮窗权限已授予即认为在跑
-        return Prefs.floatBallEnabled(this) && canDrawOverlay()
-    }
+    /**
+     * 服务是否真的在跑。
+     * 旧实现用「偏好 + 权限」猜，服务被杀后依然显示"运行中"，按钮文案永远是错的。
+     * 现在直接读 FloatingService 的进程内标志（进程被杀后初值 false，也是对的）。
+     */
+    private fun isFloatRunning(): Boolean = FloatingService.alive
 
     private fun openAccessibility() {
         try {

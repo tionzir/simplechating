@@ -68,4 +68,13 @@
 
     </PreferenceCategory>
 
+    <PreferenceCategory android:title="@string/pref_cat_log">
+
+        <Preference
+            android:key="log_view"
+            android:title="@string/pref_log_view"
+            android:summary="@string/pref_log_view_sum" />
+
+    </PreferenceCategory>
+
 </PreferenceScreen>

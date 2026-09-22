@@ -1,7 +1,8 @@
 package com.smiplechating.service
 
 import android.accessibilityservice.AccessibilityService
-import android.os.Bundle
+import android.content.Intent
+import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.smiplechating.Bus
@@ -14,9 +15,10 @@ import com.smiplechating.Prefs
  *  1. 监听目标 App 窗口内容变化，抓取最新聊天气泡文本
  *  2. 维护最近 N 条消息作为「上下文 state」
  *  3. 通过 Bus 通知悬浮面板（可自动触发分析）
+ *  4. 【保活】连接时主动拉起 FloatingService（前台通知），
+ *     让整个进程处于前台，降低被系统回收的概率
  *
  * 注意：本服务【绝不发送消息】，也不主动操作输入框。
- *      候选回复由用户点击面板上的「复制」后自行粘贴。
  */
 class ChatAccessibilityService : AccessibilityService() {
 
@@ -26,7 +28,27 @@ class ChatAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        Bus.log("无障碍服务已连接")
+        Bus.log("无障碍服务已连接 (pid=${android.os.Process.myPid()})")
+        ensureFloatingForeground()
+    }
+
+    /**
+     * 关键保活：无障碍连上后，确保 FloatingService 在跑。
+     * 只要它是前台服务，整个 App 进程就有前台优先级，
+     * 切到别的 App 时不容易被系统直接杀掉。
+     */
+    private fun ensureFloatingForeground() {
+        try {
+            val it = Intent(this, FloatingService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(it)
+            } else {
+                startService(it)
+            }
+            Bus.log("已请求拉起前台悬浮服务（保活）")
+        } catch (e: Exception) {
+            Bus.log("拉起前台服务失败: ${e.javaClass.simpleName} ${e.message}")
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -62,7 +84,6 @@ class ChatAccessibilityService : AccessibilityService() {
 
             if (Prefs.autoTrigger(this)) {
                 Bus.log("自动分析已触发（请在悬浮面板查看候选）")
-                // 悬浮面板监听 Bus.lastContext 变化，这里仅更新状态
             }
         } catch (e: Exception) {
             Bus.log("采集异常: ${e.javaClass.simpleName} ${e.message}")
@@ -92,16 +113,16 @@ class ChatAccessibilityService : AccessibilityService() {
         recent.joinToString(separator = "\n")
 
     override fun onInterrupt() {
-        Bus.log("无障碍服务被中断")
+        Bus.log("无障碍服务被中断 (onInterrupt)")
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        Bus.log("无障碍服务已断开")
+        Bus.log("无障碍服务已断开 (onDestroy)")
     }
 
-    override fun onUnbind(intent: android.content.Intent?): Boolean {
-        Bus.log("无障碍服务 unbind")
+    override fun onUnbind(intent: Intent?): Boolean {
+        Bus.log("无障碍服务 unbind （系统解绑，通常是进程被回收或服务被停用）")
         return super.onUnbind(intent)
     }
 
